@@ -1,0 +1,92 @@
+kornerz-contract/
+│
+├── src/
+│   ├── lib.rs
+│
+├── tests/
+│   ├── integration.rs
+│
+├── Cargo.toml
+└── README.md
+[package]
+name = "kornerz-contract"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+solana-program = "1.10"
+spl-token = "3.2"
+
+[dev-dependencies]
+solana-sdk = "1.10"
+#![deny(missing_docs)]
+#![forbid(unsafe_code)]
+
+use solana_program::{
+    account_info::{next_account_info, AccountInfo},
+    entrypoint,
+    entrypoint::ProgramResult,
+    program::invoke,
+    program_error::ProgramError,
+    program_pack::Pack,
+    pubkey::Pubkey,
+};
+
+use spl_token::{
+    instruction as token_instruction,
+};
+
+/// Represents the Kornerz Contract state
+pub struct KornerzContract {
+    pub milestone_achieved: bool,
+    pub tokens_rewarded: u64,
+}
+
+entrypoint!(process_instruction);
+
+fn process_instruction(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    _instruction_data: &[u8],
+) -> ProgramResult {
+    let accounts_iter = &mut accounts.iter();
+    let user_account = next_account_info(accounts_iter)?;
+    let token_mint_account = next_account_info(accounts_iter)?;
+    let token_destination_account = next_account_info(accounts_iter)?;
+
+    let mut kornerz_data = KornerzContract::unpack_from_slice(&user_account.data.borrow())?;
+    
+    if kornerz_data.milestone_achieved {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+    
+    if check_milestone(user_account) {
+        kornerz_data.milestone_achieved = true;
+        kornerz_data.tokens_rewarded += 10;
+        
+        let mint_to_ix = token_instruction::mint_to(
+            &spl_token::id(),
+            &token_mint_account.key,
+            &token_destination_account.key,
+            &user_account.key,
+            &[],
+            10
+        )?;
+        invoke(&mint_to_ix, &[token_mint_account.clone(), token_destination_account.clone(), user_account.clone()])?;
+    }
+
+    KornerzContract::pack(kornerz_data, &mut user_account.data.borrow_mut())?;
+    Ok(())
+}
+
+fn check_milestone(user_account: &AccountInfo) -> bool {
+    // Placeholder logic
+    true
+}
+
+impl KornerzContract {
+    // Unpack and pack methods for serialization and deserialization
+    // ...
+}
+
+
